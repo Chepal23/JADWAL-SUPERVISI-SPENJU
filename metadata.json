@@ -1,0 +1,6 @@
+{
+  "name": "Jadwal Supervisi Guru KBM - SMP Negeri 7 Sentani",
+  "description": "Aplikasi Manajemen Jadwal Supervisi Pembelajaran & Administrasi Guru SMP Negeri 7 Sentani",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
