@@ -6,6 +6,8 @@ import {
   RegisteredUser,
   JadwalItem,
   EvaluatorType,
+  SchoolSettings,
+  DEFAULT_SCHOOL_SETTINGS,
   SASARAN_LIST,
   INITIAL_SAMPLE_JADWAL,
   INITIAL_SAMPLE_USERS
@@ -95,7 +97,29 @@ export default function SupervisiClient() {
     return INITIAL_SAMPLE_JADWAL;
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'isi' | 'daftar' | 'pemetaan' | 'konfirmasi' | 'laporan' | 'ai-asisten' | 'panduan'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'isi' | 'daftar' | 'pemetaan' | 'konfirmasi' | 'laporan' | 'ai-asisten' | 'panduan' | 'pengaturan'>('dashboard');
+
+  const [schoolSettings, setSchoolSettings] = useState<SchoolSettings>(() => {
+    if (typeof window === 'undefined') return DEFAULT_SCHOOL_SETTINGS;
+    const saved = localStorage.getItem('supervisi_school_settings_smp7');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return DEFAULT_SCHOOL_SETTINGS;
+      }
+    }
+    return DEFAULT_SCHOOL_SETTINGS;
+  });
+
+  const [settingsForm, setSettingsForm] = useState<SchoolSettings>(schoolSettings);
+
+  const handleSaveSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSchoolSettings(settingsForm);
+    localStorage.setItem('supervisi_school_settings_smp7', JSON.stringify(settingsForm));
+    showToast('Pengaturan sekolah & laporan berhasil diperbarui!');
+  };
 
   // Login inputs
   const [loginMode, setLoginMode] = useState<'login' | 'register'>('login');
@@ -783,6 +807,23 @@ export default function SupervisiClient() {
             </button>
           )}
 
+          {currentUser.role === 'admin' && (
+            <button
+              onClick={() => {
+                setSettingsForm(schoolSettings);
+                setActiveTab('pengaturan');
+              }}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition ${
+                activeTab === 'pengaturan'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Sliders className="w-4 h-4" />
+              <span>Pengaturan Admin</span>
+            </button>
+          )}
+
           <button
             onClick={() => setActiveTab('laporan')}
             className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition ${
@@ -1442,11 +1483,11 @@ export default function SupervisiClient() {
             {/* PRINTABLE PREVIEW AREA */}
             <div className="bg-slate-50 border border-slate-200 p-8 rounded-3xl space-y-6 print:bg-white print:border-none">
               <div className="text-center border-b-2 border-slate-800 pb-6">
-                <h3 className="text-lg font-bold uppercase tracking-wide text-slate-700">PEMERINTAH KABUPATEN JAYAPURA</h3>
-                <h4 className="text-xl font-extrabold uppercase text-slate-900">DINAS PENDIDIKAN</h4>
-                <h2 className="text-2xl font-black uppercase text-indigo-900 mt-1">SMP NEGERI 7 SENTANI</h2>
+                <h3 className="text-lg font-bold uppercase tracking-wide text-slate-700">{schoolSettings.agency}</h3>
+                <h4 className="text-xl font-extrabold uppercase text-slate-900">{schoolSettings.department}</h4>
+                <h2 className="text-2xl font-black uppercase text-indigo-900 mt-1">{schoolSettings.schoolName}</h2>
                 <p className="text-xs text-slate-600 mt-1">
-                  Jl. Raya Sentani - Depapre, Sentani, Kabupaten Jayapura, Papua • Email: smpn7sentani@gmail.com
+                  {schoolSettings.address} • Email: {schoolSettings.email}
                 </p>
               </div>
 
@@ -1532,21 +1573,149 @@ export default function SupervisiClient() {
 
               <div className="grid grid-cols-2 pt-10 text-xs text-slate-800">
                 <div className="text-center space-y-16">
-                  <p className="font-semibold">Mengetahui,<br/>Kepala SMP Negeri 7 Sentani</p>
+                  <p className="font-semibold">Mengetahui,<br/>Kepala {schoolSettings.schoolName}</p>
                   <div>
-                    <p className="font-bold underline">Dra. Hj. Kepala Sekolah, M.Pd</p>
-                    <p>NIP. 19680101 199403 2 001</p>
+                    <p className="font-bold underline">{schoolSettings.principalName}</p>
+                    <p>{schoolSettings.principalNip}</p>
                   </div>
                 </div>
                 <div className="text-center space-y-16">
                   <p className="font-semibold">Sentani, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}<br/>Koordinator Tim Supervisi</p>
                   <div>
-                    <p className="font-bold underline">Dra. Hj. Siti Aminah, M.Pd</p>
-                    <p>NIP. 19720512 199802 2 003</p>
+                    <p className="font-bold underline">{schoolSettings.coordinatorName}</p>
+                    <p>{schoolSettings.coordinatorNip}</p>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TAB: PENGATURAN ADMIN */}
+        {activeTab === 'pengaturan' && currentUser.role === 'admin' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-10 animate-fadeIn space-y-6 max-w-4xl mx-auto">
+            <div className="border-b pb-5">
+              <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">
+                Kustomisasi Instansi & Laporan
+              </span>
+              <h2 className="text-2xl font-extrabold text-slate-800 mt-2">Pengaturan Admin & Kop Laporan</h2>
+              <p className="text-slate-500 text-sm mt-1">
+                Ubah nama lembaga, dinas, sekolah, alamat, serta nama penandatangan laporan & berita acara supervisi.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Nama Lembaga / Pemerintah</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.agency}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, agency: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Dinas / Instansi Terkait</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.department}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, department: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Nama Sekolah / Satuan Pendidikan</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.schoolName}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, schoolName: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Email Sekolah</label>
+                  <input
+                    type="email"
+                    required
+                    value={settingsForm.email}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, email: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Alamat Sekolah</label>
+                <input
+                  type="text"
+                  required
+                  value={settingsForm.address}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Nama Kepala Sekolah / Penandatangan 1</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.principalName}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, principalName: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">NIP Kepala Sekolah</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.principalNip}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, principalNip: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Nama Koordinator / Penandatangan 2</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.coordinatorName}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, coordinatorName: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">NIP Koordinator</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.coordinatorNip}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, coordinatorNip: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm bg-slate-50/50 outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t">
+                <button
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 transition text-sm flex items-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Simpan Perubahan Pengaturan</span>
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
