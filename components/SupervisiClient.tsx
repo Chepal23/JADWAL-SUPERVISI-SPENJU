@@ -5,8 +5,8 @@ import {
   User,
   RegisteredUser,
   JadwalItem,
+  EvaluatorType,
   SASARAN_LIST,
-  EVALUATOR_OPTIONS,
   INITIAL_SAMPLE_JADWAL,
   INITIAL_SAMPLE_USERS
 } from '@/lib/types';
@@ -49,7 +49,8 @@ import {
   Lock,
   KeyRound,
   UserCheck2,
-  XCircle
+  XCircle,
+  UserCog
 } from 'lucide-react';
 
 export default function SupervisiClient() {
@@ -94,7 +95,7 @@ export default function SupervisiClient() {
     return INITIAL_SAMPLE_JADWAL;
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'isi' | 'daftar' | 'pemetaan' | 'konfirmasi' | 'laporan' | 'ai-asisten'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'isi' | 'daftar' | 'pemetaan' | 'konfirmasi' | 'laporan' | 'ai-asisten' | 'panduan'>('dashboard');
 
   // Login inputs
   const [loginMode, setLoginMode] = useState<'login' | 'register'>('login');
@@ -106,8 +107,34 @@ export default function SupervisiClient() {
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regRole, setRegRole] = useState<'guru' | 'penilai'>('guru');
+  const [regEvaluatorType, setRegEvaluatorType] = useState<EvaluatorType>('Guru Senior');
 
-  // AI Assistant states (Google Search Grounding)
+  // Form states (Isi Jadwal)
+  const [editId, setEditId] = useState('');
+  const [hari, setHari] = useState<'Senin' | 'Selasa' | 'Rabu' | 'Kamis' | 'Jumat' | 'Sabtu'>('Senin');
+  const [jam, setJam] = useState('Jam ke-1 (07.00-07.40)');
+  const [kelas, setKelas] = useState('VII-A');
+  const [materi, setMateri] = useState('');
+  const [jenisSupervisi, setJenisSupervisi] = useState<string[]>(['Pembelajaran']);
+  const [sasaranSelected, setSasaranSelected] = useState<string[]>([]);
+  const [catatanGuru, setCatatanGuru] = useState('');
+  const [selectedPenilaiId, setSelectedPenilaiId] = useState('');
+
+  // Filter & Search
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Report format
+  const [reportFormat, setReportFormat] = useState<'jadwal' | 'rekap'>('jadwal');
+
+  // Modal detail
+  const [selectedJadwal, setSelectedJadwal] = useState<JadwalItem | null>(null);
+  const [inputSkor, setInputSkor] = useState<number>(85);
+  const [inputFeedback, setInputFeedback] = useState('');
+  const [inputCatatanPenilai, setInputCatatanPenilai] = useState('');
+  const [assignedEvaluatorName, setAssignedEvaluatorName] = useState('');
+
+  // AI Assistant
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<{ text: string; groundingChunks: any[] } | null>(null);
@@ -133,36 +160,14 @@ export default function SupervisiClient() {
     }
   };
 
-  // Form states (Isi Jadwal)
-  const [editId, setEditId] = useState('');
-  const [hari, setHari] = useState<'Senin' | 'Selasa' | 'Rabu' | 'Kamis' | 'Jumat' | 'Sabtu'>('Senin');
-  const [jam, setJam] = useState('Jam ke-1 (07.00-07.40)');
-  const [kelas, setKelas] = useState('VII-A');
-  const [materi, setMateri] = useState('');
-  const [jenisSupervisi, setJenisSupervisi] = useState<string[]>(['Pembelajaran']);
-  const [sasaranSelected, setSasaranSelected] = useState<string[]>([]);
-  const [catatanGuru, setCatatanGuru] = useState('');
-
-  // Filter & Search (Daftar Supervisi)
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-
-  // Modal detail
-  const [selectedJadwal, setSelectedJadwal] = useState<JadwalItem | null>(null);
-  const [inputSkor, setInputSkor] = useState<number>(85);
-  const [inputFeedback, setInputFeedback] = useState('');
-  const [inputCatatanPenilai, setInputCatatanPenilai] = useState('');
-  const [assignedEvaluator, setAssignedEvaluator] = useState<string>(EVALUATOR_OPTIONS[0]);
-
-  // Toast
-  const [toast, setToast] = useState<{ message: string; isError: boolean } | null>(null);
-
   const showToast = (message: string, isError = false) => {
     setToast({ message, isError });
     setTimeout(() => {
       setToast(null);
     }, 3000);
   };
+
+  const [toast, setToast] = useState<{ message: string; isError: boolean } | null>(null);
 
   const saveData = (newList: JadwalItem[]) => {
     setJadwalList(newList);
@@ -184,7 +189,6 @@ export default function SupervisiClient() {
       return;
     }
 
-    // Check admin hardcoded login (paul / paul)
     if (uname === 'paul' && pwd === 'paul') {
       const adminUser: User = { id: 'USR-ADMIN', name: 'Paul (Admin)', username: 'paul', role: 'admin' };
       setCurrentUser(adminUser);
@@ -193,7 +197,6 @@ export default function SupervisiClient() {
       return;
     }
 
-    // Check registered users in DB
     const found = registeredUsers.find(u => u.username.toLowerCase() === uname && u.password === pwd);
     if (!found) {
       showToast('Username atau password salah!', true);
@@ -205,7 +208,7 @@ export default function SupervisiClient() {
       return;
     }
 
-    const user: User = { id: found.id, name: found.name, username: found.username, role: found.role };
+    const user: User = { id: found.id, name: found.name, username: found.username, role: found.role, evaluatorType: found.evaluatorType };
     setCurrentUser(user);
     localStorage.setItem('supervisi_user_smp7', JSON.stringify(user));
     showToast(`Selamat datang, ${found.name}!`);
@@ -228,7 +231,7 @@ export default function SupervisiClient() {
     }
 
     if (registeredUsers.some(u => u.username.toLowerCase() === uname)) {
-      showToast('Username sudah terunakan, silakan gunakan username lain.', true);
+      showToast('Username sudah digunakan, silakan gunakan username lain.', true);
       return;
     }
 
@@ -238,6 +241,7 @@ export default function SupervisiClient() {
       username: uname,
       password: pwd,
       role: regRole,
+      evaluatorType: regRole === 'penilai' ? regEvaluatorType : undefined,
       status: 'pending',
       createdAt: new Date().toISOString()
     };
@@ -301,6 +305,17 @@ export default function SupervisiClient() {
       return;
     }
 
+    // Find penilai name from selected penilai ID
+    let assignedPenilaiName = null;
+    let assignedEvaluatorType = undefined;
+    if (selectedPenilaiId) {
+      const foundPenilai = registeredUsers.find(u => u.id === selectedPenilaiId);
+      if (foundPenilai) {
+        assignedPenilaiName = `${foundPenilai.name} (${foundPenilai.evaluatorType || 'Penilai'})`;
+        assignedEvaluatorType = foundPenilai.evaluatorType;
+      }
+    }
+
     if (editId) {
       const updated = jadwalList.map(j => {
         if (j.id === editId) {
@@ -313,6 +328,9 @@ export default function SupervisiClient() {
             jenis: jenisSupervisi,
             sasaran: sasaranSelected,
             catatanGuru,
+            penilai: assignedPenilaiName || j.penilai,
+            evaluatorType: assignedEvaluatorType || j.evaluatorType,
+            status: assignedPenilaiName ? ('ditugaskan' as const) : j.status,
             updatedAt: new Date().toISOString()
           };
         }
@@ -332,8 +350,9 @@ export default function SupervisiClient() {
         jenis: jenisSupervisi,
         sasaran: sasaranSelected,
         catatanGuru,
-        penilai: null,
-        status: 'menunggu',
+        penilai: assignedPenilaiName,
+        evaluatorType: assignedEvaluatorType,
+        status: assignedPenilaiName ? 'ditugaskan' : 'menunggu',
         feedback: '',
         skor: null,
         catatanPenilai: '',
@@ -347,6 +366,7 @@ export default function SupervisiClient() {
     setMateri('');
     setCatatanGuru('');
     setSasaranSelected([]);
+    setSelectedPenilaiId('');
     setEditId('');
     setActiveTab('daftar');
   };
@@ -374,20 +394,25 @@ export default function SupervisiClient() {
     showToast('Jadwal berhasil dihapus');
   };
 
-  const handleAssignPenilaiAdmin = (id: string, penilaiName: string) => {
+  const handleAssignPenilaiAdmin = (id: string, penilaiUserId: string) => {
+    const foundPenilai = registeredUsers.find(u => u.id === penilaiUserId);
+    if (!foundPenilai) return;
+    const penilaiNameStr = `${foundPenilai.name} (${foundPenilai.evaluatorType || 'Penilai'})`;
+
     const updated = jadwalList.map(j => {
       if (j.id === id) {
         return {
           ...j,
-          penilai: penilaiName,
-          status: j.status === 'menunggu' ? 'ditugaskan' as const : j.status,
+          penilai: penilaiNameStr,
+          evaluatorType: foundPenilai.evaluatorType,
+          status: j.status === 'menunggu' ? ('ditugaskan' as const) : j.status,
           updatedAt: new Date().toISOString()
         };
       }
       return j;
     });
     saveData(updated);
-    showToast(`Penilai "${penilaiName}" berhasil ditugaskan`);
+    showToast(`Penilai "${penilaiNameStr}" berhasil ditugaskan`);
     if (selectedJadwal && selectedJadwal.id === id) {
       setSelectedJadwal(updated.find(j => j.id === id) || null);
     }
@@ -402,7 +427,7 @@ export default function SupervisiClient() {
           feedback: inputFeedback,
           catatanPenilai: inputCatatanPenilai,
           status: 'selesai' as const,
-          penilai: j.penilai || currentUser?.name || 'Supervisor',
+          penilai: j.penilai || currentUser?.name || 'Penilai',
           updatedAt: new Date().toISOString()
         };
       }
@@ -430,6 +455,9 @@ export default function SupervisiClient() {
     showToast('Data berhasil diexport ke JSON');
   };
 
+  // Approved Penilai list for dropdown selection
+  const approvedPenilaiList = registeredUsers.filter(u => u.role === 'penilai' && u.status === 'approved');
+
   // Stats
   const totalJadwal = jadwalList.length;
   const menungguPenilai = jadwalList.filter(j => j.status === 'menunggu').length;
@@ -452,7 +480,6 @@ export default function SupervisiClient() {
             <p className="text-slate-500 text-sm mt-1">Sistem Administrasi & Pembelajaran</p>
           </div>
 
-          {/* LOGIN / REGISTER TABS */}
           <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
             <button
               type="button"
@@ -494,7 +521,7 @@ export default function SupervisiClient() {
                   <input
                     type="text"
                     required
-                    placeholder="Masukkan username Anda (atau paul untuk admin)"
+                    placeholder="Username (guru1, penilai1, atau paul)"
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
@@ -511,7 +538,7 @@ export default function SupervisiClient() {
                   <input
                     type="password"
                     required
-                    placeholder="Masukkan password Anda"
+                    placeholder="Password akun Anda"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
@@ -548,10 +575,25 @@ export default function SupervisiClient() {
                   onChange={(e) => setRegRole(e.target.value as any)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
                 >
-                  <option value="guru">Guru (Mengisi Jadwal Kesiapan KBM)</option>
-                  <option value="penilai">Penilai / Supervisor / Wakakur</option>
+                  <option value="guru">Guru KBM</option>
+                  <option value="penilai">Penilai / Supervisor / Pengawas</option>
                 </select>
               </div>
+
+              {regRole === 'penilai' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kategori Penilai</label>
+                  <select
+                    value={regEvaluatorType}
+                    onChange={(e) => setRegEvaluatorType(e.target.value as any)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50 font-medium text-indigo-700"
+                  >
+                    <option value="Kepala Sekolah">Kepala Sekolah</option>
+                    <option value="Pengawas Sekolah">Pengawas Sekolah</option>
+                    <option value="Guru Senior">Guru Senior / Mentor</option>
+                  </select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -559,7 +601,7 @@ export default function SupervisiClient() {
                   <input
                     type="text"
                     required
-                    placeholder="Contoh: budi"
+                    placeholder="Username"
                     value={regUsername}
                     onChange={(e) => setRegUsername(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
@@ -591,9 +633,12 @@ export default function SupervisiClient() {
             </form>
           )}
 
-          <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-            <p className="text-[11px] text-slate-400">
-              Demo login Admin: Username: <strong className="text-slate-600">paul</strong> | Password: <strong className="text-slate-600">paul</strong>
+          <div className="mt-6 pt-5 border-t border-slate-100 text-center space-y-1">
+            <p className="text-[11px] text-slate-500">
+              Demo Guru 1: <strong className="text-indigo-600">guru1</strong> / <strong className="text-indigo-600">guru2026</strong>
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Demo Penilai (Kasek): <strong className="text-indigo-600">penilai1</strong> / <strong className="text-indigo-600">penilai2026</strong>
             </p>
           </div>
         </div>
@@ -601,7 +646,7 @@ export default function SupervisiClient() {
     );
   }
 
-  // Filter jadwal for non-admin
+  // Filter jadwal
   const filteredJadwal = jadwalList.filter(item => {
     const matchStatus = filterStatus === 'all' || item.status === filterStatus;
     const matchQuery = item.guru.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -632,7 +677,7 @@ export default function SupervisiClient() {
             <div className="text-right">
               <p className="font-bold text-sm">{currentUser.name}</p>
               <p className="text-xs text-blue-200 uppercase tracking-wide font-medium">
-                {currentUser.role === 'guru' ? 'Guru' : currentUser.role === 'penilai' ? 'Penilai / Supervisor' : 'Admin Sekolah'}
+                {currentUser.role === 'guru' ? 'Guru KBM' : currentUser.role === 'penilai' ? `Penilai (${currentUser.evaluatorType || 'Supervisor'})` : 'Admin Sekolah'}
               </p>
             </div>
             <button
@@ -658,7 +703,7 @@ export default function SupervisiClient() {
 
       {/* MAIN */}
       <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full">
-        {/* NAV TABS */}
+        {/* NAV TABS (MENUS & SUBMENUS BERDASARKAN PERAN) */}
         <div className="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-2xl shadow-sm border border-slate-200/80">
           <button
             onClick={() => setActiveTab('dashboard')}
@@ -672,13 +717,14 @@ export default function SupervisiClient() {
             <span>Dashboard</span>
           </button>
 
-          {currentUser.role !== 'admin' && (
+          {currentUser.role === 'guru' && (
             <button
               onClick={() => {
                 setEditId('');
                 setMateri('');
                 setCatatanGuru('');
                 setSasaranSelected([]);
+                setSelectedPenilaiId('');
                 setActiveTab('isi');
               }}
               className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition ${
@@ -701,8 +747,9 @@ export default function SupervisiClient() {
             }`}
           >
             <List className="w-4 h-4" />
-            <span>{currentUser.role === 'guru' ? 'Jadwal & Hasil Saya' : 'Daftar Supervisi'}</span>
-            <span className="bg-white/20 text-xs px-2 py-0.5 rounded-full">{jadwalList.length}</span>
+            <span>
+              {currentUser.role === 'guru' ? 'Jadwal & Hasil Penilaian Saya' : currentUser.role === 'penilai' ? 'Daftar Tugas Observasi Penilai' : 'Daftar Semua Supervisi'}
+            </span>
           </button>
 
           <button
@@ -759,9 +806,21 @@ export default function SupervisiClient() {
             <Sparkles className="w-4 h-4 text-amber-300" />
             <span>Asisten Kurikulum AI</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('panduan')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition ${
+              activeTab === 'panduan'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-cyan-300" />
+            <span>Panduan Penggunaan</span>
+          </button>
         </div>
 
-        {/* TAB 1: DASHBOARD */}
+        {/* TAB: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="space-y-8 animate-fadeIn">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -822,7 +881,7 @@ export default function SupervisiClient() {
                   </div>
                   <div>
                     <h4 className="font-extrabold text-amber-900 text-base">Ada {pendingUsersCount} Akun Baru Menunggu Konfirmasi</h4>
-                    <p className="text-xs text-amber-700 mt-0.5">Guru atau Penilai baru telah mendaftar dan menunggu persetujuan Anda.</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Kepala Sekolah, Pengawas, Guru Senior, atau Guru KBM baru telah mendaftar.</p>
                   </div>
                 </div>
                 <button
@@ -837,20 +896,24 @@ export default function SupervisiClient() {
             <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-blue-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
               <div className="relative z-10 max-w-2xl">
                 <span className="bg-white/20 text-xs px-3 py-1 rounded-full font-semibold uppercase tracking-wider">
-                  Sistem Kerahasiaan Penilaian & Penugasan Penilai
+                  Sistem Penilai Terspesialisasi & Privasi Penilaian
                 </span>
                 <h2 className="text-2xl md:text-3xl font-extrabold mt-3">SMP Negeri 7 Sentani</h2>
                 <p className="text-blue-100 text-sm mt-2 leading-relaxed">
-                  Admin dapat menunjuk penilai (Kepala Sekolah, Wakasek Kurikulum, atau Penilai Senior). Catatan & umpan balik penilaian bersifat rahasia dan hanya dapat dilihat oleh guru bersangkutan secara privat.
+                  {currentUser.role === 'guru'
+                    ? 'Anda dapat memilih Penilai (Kepala Sekolah, Pengawas Sekolah, atau Guru Senior) saat mengisi jadwal kesiapan mengajar.'
+                    : currentUser.role === 'penilai'
+                    ? `Anda masuk sebagai ${currentUser.evaluatorType || 'Penilai'}. Akses daftar tugas observasi dan lembar penilaian KBM khusus untuk Anda.`
+                    : 'Kelola pendaftaran akun penilai (Kepala Sekolah, Pengawas, Guru Senior) dan penugasan supervisi.'}
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
-                  {currentUser.role !== 'admin' && (
+                  {currentUser.role === 'guru' && (
                     <button
                       onClick={() => setActiveTab('isi')}
                       className="bg-white text-indigo-900 hover:bg-blue-50 font-bold px-6 py-3 rounded-2xl shadow-lg transition flex items-center gap-2 text-sm"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Isi Jadwal Kesiapan KBM</span>
+                      <span>Pilih Penilai & Isi Jadwal KBM</span>
                     </button>
                   )}
                   <button
@@ -858,7 +921,7 @@ export default function SupervisiClient() {
                     className="bg-white/10 hover:bg-white/20 text-white font-semibold px-6 py-3 rounded-2xl backdrop-blur-md transition flex items-center gap-2 text-sm border border-white/20"
                   >
                     <List className="w-4 h-4" />
-                    <span>Daftar Supervisi KBM</span>
+                    <span>Lihat Daftar Jadwal & Tugas</span>
                   </button>
                 </div>
               </div>
@@ -866,18 +929,18 @@ export default function SupervisiClient() {
           </div>
         )}
 
-        {/* TAB 2: ISI JADWAL KESIAPAN */}
-        {activeTab === 'isi' && currentUser.role !== 'admin' && (
+        {/* TAB: ISI JADWAL KESIAPAN (GURU) DENGAN OPSI PILIH PENILAI */}
+        {activeTab === 'isi' && currentUser.role === 'guru' && (
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-10 animate-fadeIn max-w-4xl mx-auto">
             <div className="border-b pb-5 mb-6">
               <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">
-                Form Kesiapan Mengajar
+                Form Kesiapan & Pemilihan Penilai
               </span>
               <h2 className="text-2xl font-extrabold text-slate-800 mt-2">
                 {editId ? 'Edit Jadwal Supervisi KBM' : 'Form Kesiapan Supervisi KBM'}
               </h2>
               <p className="text-slate-500 text-sm mt-1">
-                Tentukan hari, jam, kelas, mata pelajaran, serta sasaran aspek pembelajaran yang siap disupervisi.
+                Tentukan jadwal kelas dan pilih Penilai Anda (Kepala Sekolah, Pengawas, atau Guru Senior) agar persiapan maksimal.
               </p>
             </div>
 
@@ -894,18 +957,33 @@ export default function SupervisiClient() {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Pilih Penilai / Supervisor *</label>
+                  <select
+                    required
+                    value={selectedPenilaiId}
+                    onChange={(e) => setSelectedPenilaiId(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50 font-semibold text-indigo-900"
+                  >
+                    <option value="">-- Pilih Penilai (Kepala Sekolah / Pengawas / Guru Senior) --</option>
+                    {approvedPenilaiList.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — [{p.evaluatorType || 'Penilai'}]
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-400 mt-1">Penilai yang Anda pilih akan menyiapkan instrumen dan hadir di kelas.</p>
+                </div>
+
+                <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Hari Kesiapan *</label>
                   <select
                     value={hari}
                     onChange={(e) => setHari(e.target.value as any)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
                   >
-                    <option value="Senin">Senin</option>
-                    <option value="Selasa">Selasa</option>
-                    <option value="Rabu">Rabu</option>
-                    <option value="Kamis">Kamis</option>
-                    <option value="Jumat">Jumat</option>
-                    <option value="Sabtu">Sabtu</option>
+                    <option value="Senin">Senin</option><option value="Selasa">Selasa</option>
+                    <option value="Rabu">Rabu</option><option value="Kamis">Kamis</option>
+                    <option value="Jumat">Jumat</option><option value="Sabtu">Sabtu</option>
                   </select>
                 </div>
 
@@ -916,14 +994,10 @@ export default function SupervisiClient() {
                     onChange={(e) => setJam(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
                   >
-                    <option>Jam ke-1 (07.00-07.40)</option>
-                    <option>Jam ke-2 (07.40-08.20)</option>
-                    <option>Jam ke-3 (08.20-09.00)</option>
-                    <option>Jam ke-4 (09.15-09.55)</option>
-                    <option>Jam ke-5 (09.55-10.35)</option>
-                    <option>Jam ke-6 (10.35-11.15)</option>
-                    <option>Jam ke-7 (11.15-11.55)</option>
-                    <option>Jam ke-8 (12.30-13.10)</option>
+                    <option>Jam ke-1 (07.00-07.40)</option><option>Jam ke-2 (07.40-08.20)</option>
+                    <option>Jam ke-3 (08.20-09.00)</option><option>Jam ke-4 (09.15-09.55)</option>
+                    <option>Jam ke-5 (09.55-10.35)</option><option>Jam ke-6 (10.35-11.15)</option>
+                    <option>Jam ke-7 (11.15-11.55)</option><option>Jam ke-8 (12.30-13.10)</option>
                     <option>Jam ke-9 (13.10-13.50)</option>
                   </select>
                 </div>
@@ -947,7 +1021,7 @@ export default function SupervisiClient() {
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: Matematika - Persamaan Linear"
+                  placeholder="Contoh: IPA - Sistem Pencernaan Manusia"
                   value={materi}
                   onChange={(e) => setMateri(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
@@ -999,7 +1073,7 @@ export default function SupervisiClient() {
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Catatan Kesiapan (Opsional)</label>
                 <textarea
                   rows={3}
-                  placeholder="Catatan tambahan untuk penilai..."
+                  placeholder="Catatan untuk penilai..."
                   value={catatanGuru}
                   onChange={(e) => setCatatanGuru(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
@@ -1015,6 +1089,7 @@ export default function SupervisiClient() {
                       setMateri('');
                       setCatatanGuru('');
                       setSasaranSelected([]);
+                      setSelectedPenilaiId('');
                       setActiveTab('daftar');
                     }}
                     className="px-6 py-3 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition text-sm"
@@ -1027,23 +1102,31 @@ export default function SupervisiClient() {
                   className="px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 shadow-lg shadow-indigo-600/30 transition text-sm flex items-center gap-2"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <span>{editId ? 'Perbarui Jadwal Kesiapan' : 'Simpan Jadwal Kesiapan'}</span>
+                  <span>{editId ? 'Perbarui Jadwal Kesiapan' : 'Simpan & Pilih Penilai'}</span>
                 </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* TAB 3: DAFTAR SUPERVISI & KERAHASIAAN */}
+        {/* TAB: DAFTAR SUPERVISI & TUGAS PENILAI */}
         {activeTab === 'daftar' && (
           <div className="space-y-6 animate-fadeIn">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
               <div>
                 <h2 className="text-xl font-extrabold text-slate-800">
-                  {currentUser.role === 'guru' ? 'Jadwal & Hasil Penilaian Privasi Anda' : 'Daftar Supervisi & Penugasan Penilai'}
+                  {currentUser.role === 'guru'
+                    ? 'Jadwal & Hasil Penilaian Privasi Anda'
+                    : currentUser.role === 'penilai'
+                    ? `Daftar Tugas Observasi KBM (${currentUser.evaluatorType || 'Penilai'})`
+                    : 'Daftar Semua Jadwal Supervisi'}
                 </h2>
                 <p className="text-slate-500 text-sm mt-0.5">
-                  {currentUser.role === 'guru' ? 'Catatan dan hasil penilaian penilai bersifat rahasia khusus untuk Anda.' : 'Admin menunjuk Kepala Sekolah atau Wakakur / Penilai Senior untuk setiap guru.'}
+                  {currentUser.role === 'guru'
+                    ? 'Catatan dan hasil penilaian penilai Anda bersifat rahasia.'
+                    : currentUser.role === 'penilai'
+                    ? 'Daftar guru yang memilih Anda sebagai penilai atau ditugaskan oleh admin.'
+                    : 'Kelola penugasan penilai (Kepala Sekolah, Pengawas, Guru Senior).'}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -1084,14 +1167,12 @@ export default function SupervisiClient() {
                 {filteredJadwal.map(item => {
                   const isOwner = item.guru === currentUser.name;
                   const isAdmin = currentUser.role === 'admin';
-                  const isAssignedEvaluator = item.penilai?.includes(currentUser.name);
+                  const isAssignedEvaluator = currentUser.role === 'penilai' && item.penilai?.includes(currentUser.name);
 
-                  // Confidentiality check: if user is guru and not owner, hide feedback details unless owner.
-                  // But wait, user prompt: "tdk semua guru bisa melihat Catatan dari Penilai baik kepala Sekolah maupun dari Waka Kurikulum atau Penilai Senior jadi guru masing-masing akan masuk menggunakan nama dan passwordnya"
-                  // So a guru can ONLY see feedback if isOwner.
-                  if (currentUser.role === 'guru' && !isOwner) {
-                    return null; // hide other teachers' items or show anonymized
-                  }
+                  // Confidentiality for teachers: guru can only view their own items
+                  if (currentUser.role === 'guru' && !isOwner) return null;
+                  // Penilai view: penilai can view items assigned to them
+                  if (currentUser.role === 'penilai' && !isAssignedEvaluator && !isAdmin) return null;
 
                   return (
                     <div key={item.id} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition">
@@ -1103,7 +1184,7 @@ export default function SupervisiClient() {
                               item.status === 'selesai' ? 'bg-emerald-100 text-emerald-800' :
                               item.status === 'ditugaskan' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
                             }`}>
-                              {item.status === 'selesai' ? 'Selesai Dinilai' : item.status === 'ditugaskan' ? 'Sudah Ditugaskan' : 'Menunggu Penilai'}
+                              {item.status === 'selesai' ? 'Selesai Dinilai' : item.status === 'ditugaskan' ? 'Ditugaskan' : 'Menunggu Penilai'}
                             </span>
                             {item.jenis.map(j => (
                               <span key={j} className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-0.5 rounded-full font-semibold">
@@ -1133,24 +1214,23 @@ export default function SupervisiClient() {
 
                           <div className="flex flex-wrap items-center gap-4 text-xs pt-2 border-t border-slate-100 text-slate-500 justify-between">
                             <div>
-                              <span>Penilai Ditunjuk: </span>
+                              <span>Penilai Terpilih: </span>
                               <strong className={item.penilai ? 'text-indigo-700 bg-indigo-50 px-2 py-1 rounded-lg' : 'text-amber-600'}>
-                                {item.penilai || 'Belum ditunjuk Admin'}
+                                {item.penilai || 'Belum dipilih guru / ditunjuk admin'}
                               </strong>
                             </div>
 
-                            {/* ADMIN SELECT EVALUATOR QUICKLY */}
                             {isAdmin && (
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-slate-700">Pilih Penilai:</span>
+                                <span className="font-semibold text-slate-700">Ubah Penilai:</span>
                                 <select
-                                  value={item.penilai || ''}
+                                  value=""
                                   onChange={(e) => handleAssignPenilaiAdmin(item.id, e.target.value)}
                                   className="px-3 py-1.5 rounded-xl border border-indigo-200 text-xs font-medium text-indigo-900 bg-indigo-50/50 outline-none"
                                 >
-                                  <option value="">-- Pilih Penilai (Kasek / Wakakur / Senior) --</option>
-                                  {EVALUATOR_OPTIONS.map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
+                                  <option value="">-- Pilih Penilai Baru --</option>
+                                  {approvedPenilaiList.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name} ({p.evaluatorType})</option>
                                   ))}
                                 </select>
                               </div>
@@ -1171,12 +1251,11 @@ export default function SupervisiClient() {
                               setInputSkor(item.skor || 85);
                               setInputFeedback(item.feedback || '');
                               setInputCatatanPenilai(item.catatanPenilai || '');
-                              setAssignedEvaluator(item.penilai || EVALUATOR_OPTIONS[0]);
                             }}
                             className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
                           >
                             <Eye className="w-4 h-4" />
-                            <span>{currentUser.role === 'guru' ? 'Lihat Privasi Hasil' : 'Detail & Penilaian'}</span>
+                            <span>{currentUser.role === 'guru' ? 'Lihat Hasil Privasi' : currentUser.role === 'penilai' ? 'Beri Penilaian KBM' : 'Detail'}</span>
                           </button>
 
                           {(isOwner || isAdmin) && currentUser.role !== 'penilai' && (
@@ -1207,7 +1286,7 @@ export default function SupervisiClient() {
           </div>
         )}
 
-        {/* TAB 4: PEMETAAN MINGGUAN */}
+        {/* TAB: PEMETAAN MINGGUAN */}
         {activeTab === 'pemetaan' && (
           <div className="space-y-8 animate-fadeIn">
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-8">
@@ -1258,25 +1337,25 @@ export default function SupervisiClient() {
           </div>
         )}
 
-        {/* TAB 5: KONFIRMASI AKUN (ADMIN ONLY) */}
+        {/* TAB: KONFIRMASI AKUN (ADMIN ONLY) */}
         {activeTab === 'konfirmasi' && currentUser.role === 'admin' && (
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-10 animate-fadeIn space-y-6">
             <div>
               <span className="bg-amber-50 text-amber-700 text-xs font-bold px-3 py-1 rounded-full">
                 Manajemen Pendaftaran Pengguna
               </span>
-              <h2 className="text-2xl font-extrabold text-slate-800 mt-2">Konfirmasi Akun Guru & Penilai Baru</h2>
-              <p className="text-slate-500 text-sm mt-0.5">Setujui atau tolak pendaftaran akun guru dan penilai yang mendaftar.</p>
+              <h2 className="text-2xl font-extrabold text-slate-800 mt-2">Konfirmasi Akun Kepala Sekolah, Pengawas, Guru Senior & Guru KBM</h2>
+              <p className="text-slate-500 text-sm mt-0.5">Setujui atau tolak pendaftaran akun baru sebelum dapat masuk ke sistem.</p>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm border border-slate-200 rounded-2xl overflow-hidden">
                 <thead>
                   <tr className="bg-slate-50 text-slate-700 text-left font-bold">
-                    <th className="px-5 py-3.5">Nama Lengkap</th>
+                    <th className="px-5 py-3.5">Nama Lengkap & Gelar</th>
                     <th className="px-5 py-3.5">Username</th>
-                    <th className="px-5 py-3.5">Peran</th>
-                    <th className="px-5 py-3.5">Status</th>
+                    <th className="px-5 py-3.5">Peran & Kategori Penilai</th>
+                    <th className="px-5 py-3.5">Status Akun</th>
                     <th className="px-5 py-3.5 text-center">Aksi Konfirmasi</th>
                   </tr>
                 </thead>
@@ -1285,7 +1364,9 @@ export default function SupervisiClient() {
                     <tr key={u.id} className="border-t border-slate-100 hover:bg-slate-50">
                       <td className="px-5 py-4 font-bold text-slate-800">{u.name}</td>
                       <td className="px-5 py-4 font-mono text-indigo-700">{u.username}</td>
-                      <td className="px-5 py-4 capitalize font-semibold text-slate-600">{u.role}</td>
+                      <td className="px-5 py-4 capitalize font-semibold text-slate-600">
+                        {u.role === 'penilai' ? `Penilai [${u.evaluatorType || 'Supervisor'}]` : 'Guru KBM'}
+                      </td>
                       <td className="px-5 py-4">
                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                           u.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -1317,7 +1398,7 @@ export default function SupervisiClient() {
           </div>
         )}
 
-        {/* TAB 6: LAPORAN */}
+        {/* TAB: LAPORAN */}
         {activeTab === 'laporan' && (
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-10 animate-fadeIn space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
@@ -1325,35 +1406,36 @@ export default function SupervisiClient() {
                 <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">
                   Dokumen Resmi Sekolah
                 </span>
-                <h2 className="text-2xl font-extrabold text-slate-800 mt-2">Laporan Rekapitulasi & Berita Acara Supervisi</h2>
-                <p className="text-slate-500 text-sm mt-0.5">Cetak lembar rekapitulasi KBM dan hasil observasi seluruh guru SMP Negeri 7 Sentani</p>
+                <h2 className="text-2xl font-extrabold text-slate-800 mt-2">Laporan & Format Cetak Dokumen</h2>
+                <p className="text-slate-500 text-sm mt-0.5">Pilih format dokumen untuk dibagikan (Jadwal Saja) atau rekapitulasi penilaian lengkap.</p>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex bg-slate-100 p-1 rounded-2xl">
+                  <button
+                    onClick={() => setReportFormat('jadwal')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                      reportFormat === 'jadwal' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Format Jadwal Saja (Untuk Dibagikan)
+                  </button>
+                  <button
+                    onClick={() => setReportFormat('rekap')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                      reportFormat === 'rekap' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Format Rekap & Hasil Penilaian
+                  </button>
+                </div>
+
                 <button
                   onClick={() => window.print()}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-3 rounded-2xl shadow-lg transition flex items-center gap-2 text-sm"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-2xl shadow-lg transition flex items-center gap-2 text-sm"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Cetak / PDF Laporan</span>
+                  <span>Cetak / PDF</span>
                 </button>
-                {currentUser.role === 'admin' && (
-                  <>
-                    <button
-                      onClick={exportDataJson}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-3 rounded-2xl transition flex items-center gap-2 text-sm"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Backup JSON</span>
-                    </button>
-                    <button
-                      onClick={resetSampleData}
-                      className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold px-4 py-3 rounded-2xl transition flex items-center gap-2 text-sm"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      <span>Reset Data</span>
-                    </button>
-                  </>
-                )}
               </div>
             </div>
 
@@ -1368,45 +1450,85 @@ export default function SupervisiClient() {
                 </p>
               </div>
 
-              <div className="text-center my-4">
-                <h3 className="font-extrabold text-lg uppercase text-slate-800">BERITA ACARA REKAPITULASI PELAKSANAAN SUPERVISI KBM</h3>
-                <p className="text-xs text-slate-500 mt-1">TAHUN AJARAN 2025/2026</p>
-              </div>
+              {reportFormat === 'jadwal' ? (
+                <>
+                  <div className="text-center my-4">
+                    <h3 className="font-extrabold text-lg uppercase text-slate-800">JADWAL PELAKSANAAN SUPERVISI KBM (UNTUK DIBAGIKAN)</h3>
+                    <p className="text-xs text-slate-500 mt-1">TAHUN AJARAN 2025/2026</p>
+                  </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs border border-slate-300">
-                  <thead>
-                    <tr className="bg-slate-200 text-slate-800">
-                      <th className="border border-slate-300 px-3 py-2">No</th>
-                      <th className="border border-slate-300 px-3 py-2">Nama Guru</th>
-                      <th className="border border-slate-300 px-3 py-2">Hari / Jam</th>
-                      <th className="border border-slate-300 px-3 py-2">Kelas</th>
-                      <th className="border border-slate-300 px-3 py-2">Mata Pelajaran</th>
-                      <th className="border border-slate-300 px-3 py-2">Penilai Ditunjuk</th>
-                      <th className="border border-slate-300 px-3 py-2">Skor</th>
-                      <th className="border border-slate-300 px-3 py-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {jadwalList.map((item, idx) => (
-                      <tr key={item.id} className="hover:bg-slate-100">
-                        <td className="border border-slate-300 px-3 py-2 text-center font-medium">{idx + 1}</td>
-                        <td className="border border-slate-300 px-3 py-2 font-bold">{item.guru}</td>
-                        <td className="border border-slate-300 px-3 py-2">{item.hari}, {item.jam.split(' ')[0]}</td>
-                        <td className="border border-slate-300 px-3 py-2 text-center">{item.kelas}</td>
-                        <td className="border border-slate-300 px-3 py-2">{item.materi}</td>
-                        <td className="border border-slate-300 px-3 py-2">{item.penilai || '-'}</td>
-                        <td className="border border-slate-300 px-3 py-2 text-center font-bold text-emerald-700">
-                          {item.skor !== null && item.skor !== undefined ? `${item.skor}` : '-'}
-                        </td>
-                        <td className="border border-slate-300 px-3 py-2 text-center font-medium capitalize">
-                          {item.status}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border border-slate-300">
+                      <thead>
+                        <tr className="bg-slate-200 text-slate-800">
+                          <th className="border border-slate-300 px-3 py-2.5">No</th>
+                          <th className="border border-slate-300 px-3 py-2.5">Nama Guru</th>
+                          <th className="border border-slate-300 px-3 py-2.5">Hari Pelaksanaan</th>
+                          <th className="border border-slate-300 px-3 py-2.5">Jam Pelajaran</th>
+                          <th className="border border-slate-300 px-3 py-2.5">Kelas</th>
+                          <th className="border border-slate-300 px-3 py-2.5">Mata Pelajaran / Materi</th>
+                          <th className="border border-slate-300 px-3 py-2.5">Penilai Ditunjuk</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {jadwalList.map((item, idx) => (
+                          <tr key={item.id} className="hover:bg-slate-100">
+                            <td className="border border-slate-300 px-3 py-2.5 text-center font-medium">{idx + 1}</td>
+                            <td className="border border-slate-300 px-3 py-2.5 font-bold">{item.guru}</td>
+                            <td className="border border-slate-300 px-3 py-2.5">{item.hari}</td>
+                            <td className="border border-slate-300 px-3 py-2.5">{item.jam}</td>
+                            <td className="border border-slate-300 px-3 py-2.5 text-center">{item.kelas}</td>
+                            <td className="border border-slate-300 px-3 py-2.5">{item.materi}</td>
+                            <td className="border border-slate-300 px-3 py-2.5 font-semibold text-indigo-700">{item.penilai || 'Belum ditentukan'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-center my-4">
+                    <h3 className="font-extrabold text-lg uppercase text-slate-800">BERITA ACARA REKAPITULASI PELAKSANAAN SUPERVISI KBM & HASIL PENILAIAN</h3>
+                    <p className="text-xs text-slate-500 mt-1">TAHUN AJARAN 2025/2026</p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border border-slate-300">
+                      <thead>
+                        <tr className="bg-slate-200 text-slate-800">
+                          <th className="border border-slate-300 px-3 py-2">No</th>
+                          <th className="border border-slate-300 px-3 py-2">Nama Guru</th>
+                          <th className="border border-slate-300 px-3 py-2">Hari / Jam</th>
+                          <th className="border border-slate-300 px-3 py-2">Kelas</th>
+                          <th className="border border-slate-300 px-3 py-2">Mata Pelajaran</th>
+                          <th className="border border-slate-300 px-3 py-2">Penilai</th>
+                          <th className="border border-slate-300 px-3 py-2">Skor</th>
+                          <th className="border border-slate-300 px-3 py-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {jadwalList.map((item, idx) => (
+                          <tr key={item.id} className="hover:bg-slate-100">
+                            <td className="border border-slate-300 px-3 py-2 text-center font-medium">{idx + 1}</td>
+                            <td className="border border-slate-300 px-3 py-2 font-bold">{item.guru}</td>
+                            <td className="border border-slate-300 px-3 py-2">{item.hari}, {item.jam.split(' ')[0]}</td>
+                            <td className="border border-slate-300 px-3 py-2 text-center">{item.kelas}</td>
+                            <td className="border border-slate-300 px-3 py-2">{item.materi}</td>
+                            <td className="border border-slate-300 px-3 py-2">{item.penilai || '-'}</td>
+                            <td className="border border-slate-300 px-3 py-2 text-center font-bold text-emerald-700">
+                              {item.skor !== null && item.skor !== undefined ? `${item.skor}` : '-'}
+                            </td>
+                            <td className="border border-slate-300 px-3 py-2 text-center font-medium capitalize">
+                              {item.status}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 pt-10 text-xs text-slate-800">
                 <div className="text-center space-y-16">
@@ -1437,7 +1559,7 @@ export default function SupervisiClient() {
               </span>
               <h2 className="text-2xl font-extrabold text-slate-800 mt-2">Asisten Kurikulum & Pedagogi AI</h2>
               <p className="text-slate-500 text-sm mt-1">
-                Ajukan pertanyaan tentang Kurikulum Merdeka, perangkat ajar RPP, metode pembelajaran, atau referensi materi KBM. AI akan melakukan pencarian web secara real-time untuk memberikan jawaban terakurat.
+                Ajukan pertanyaan tentang Kurikulum Merdeka, perangkat ajar RPP, metode pembelajaran, atau referensi materi KBM. AI akan melakukan pencarian web secara real-time.
               </p>
             </div>
 
@@ -1448,7 +1570,7 @@ export default function SupervisiClient() {
                   <textarea
                     rows={3}
                     required
-                    placeholder="Contoh: Bagaimana contoh modul ajar berdiferensiasi untuk kelas VIII SMP pada mata pelajaran Matematika?"
+                    placeholder="Contoh: Bagaimana rubrik penilaian observasi KBM untuk Kurikulum Merdeka?"
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
                     className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-slate-50/50"
@@ -1515,6 +1637,75 @@ export default function SupervisiClient() {
             )}
           </div>
         )}
+
+        {/* TAB: PANDUAN PENGGUNAAN */}
+        {activeTab === 'panduan' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-10 animate-fadeIn space-y-8 max-w-5xl mx-auto">
+            <div className="border-b pb-5">
+              <span className="bg-cyan-50 text-cyan-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 w-fit">
+                <BookOpen className="w-3.5 h-3.5" /> Panduan Resmi Penggunaan Aplikasi
+              </span>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 mt-2">Petunjuk Penggunaan untuk Guru, Penilai, & Admin</h2>
+              <p className="text-slate-500 text-sm mt-1">
+                Panduan langkah demi langkah bagi setiap pengguna SMP Negeri 7 Sentani dalam mengoperasikan sistem supervisi KBM.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* GURU */}
+              <div className="bg-indigo-50/50 border border-indigo-200/80 rounded-3xl p-6 space-y-4 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                  👨‍🏫
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-indigo-900 text-lg">Panduan untuk Guru KBM</h3>
+                  <p className="text-xs text-indigo-700 mt-0.5">Langkah persiapan & pengisian kesiapan mengajar.</p>
+                </div>
+                <ol className="space-y-3 text-xs text-slate-700 leading-relaxed list-decimal list-inside">
+                  <li><strong>Registrasi Akun:</strong> Buka halaman login, klik tab <em>Registrasi Akun Baru</em>. Masukkan nama lengkap, pilih peran <strong>Guru KBM</strong>, buat username & password Anda.</li>
+                  <li><strong>Tunggu Konfirmasi:</strong> Akun baru akan berstatus *Menunggu Konfirmasi*. Hubungi Admin sekolah agar akun Anda disetujui.</li>
+                  <li><strong>Masuk (Login):</strong> Setelah disetujui, masuk menggunakan username dan password Anda.</li>
+                  <li><strong>Isi Jadwal & Pilih Penilai:</strong> Masuk ke menu <em>Isi Jadwal Kesiapan</em>. Tentukan hari, jam, kelas, materi, dan <strong>pilih Penilai Anda</strong> (Kepala Sekolah, Pengawas, atau Guru Senior).</li>
+                  <li><strong>Lihat Hasil Rahasia:</strong> Hasil penilaian, skor, dan catatan penilai hanya dapat Anda lihat secara privat melalui menu Daftar Jadwal.</li>
+                </ol>
+              </div>
+
+              {/* PENILAI */}
+              <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-3xl p-6 space-y-4 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                  👩‍⚖️
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-emerald-900 text-lg">Panduan untuk Penilai</h3>
+                  <p className="text-xs text-emerald-700 mt-0.5">Kepala Sekolah, Pengawas & Guru Senior.</p>
+                </div>
+                <ol className="space-y-3 text-xs text-slate-700 leading-relaxed list-decimal list-inside">
+                  <li><strong>Registrasi Akun:</strong> Pilih peran <strong>Penilai / Supervisor / Pengawas</strong> pada form registrasi, lalu tentukan kategori penilai Anda (<em>Kepala Sekolah</em>, <em>Pengawas Sekolah</em>, atau <em>Guru Senior</em>).</li>
+                  <li><strong>Konfirmasi Admin:</strong> Tunggu hingga Admin menyetujui akun penilai Anda.</li>
+                  <li><strong>Tugas Observasi KBM:</strong> Pada menu <em>Daftar Tugas Observasi</em>, Anda akan melihat jadwal guru yang memilih atau ditugaskan kepada Anda.</li>
+                  <li><strong>Beri Penilaian & Umpan Balik:</strong> Klik detail sesi guru, masukkan skor kinerja (0-100), catatan observasi, dan rekomendasi tindak lanjut.</li>
+                </ol>
+              </div>
+
+              {/* ADMIN */}
+              <div className="bg-amber-50/50 border border-amber-200/80 rounded-3xl p-6 space-y-4 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-amber-600 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                  ⭐
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-amber-900 text-lg">Panduan untuk Admin</h3>
+                  <p className="text-xs text-amber-700 mt-0.5">Kepala Sekolah / Operator Sistem.</p>
+                </div>
+                <ol className="space-y-3 text-xs text-slate-700 leading-relaxed list-decimal list-inside">
+                  <li><strong>Login Admin:</strong> Masuk menggunakan username: <code className="bg-white px-1.5 py-0.5 rounded font-bold text-amber-900">paul</code> dan password: <code className="bg-white px-1.5 py-0.5 rounded font-bold text-amber-900">paul</code>.</li>
+                  <li><strong>Konfirmasi Akun Baru:</strong> Buka tab <em>Konfirmasi Akun</em> untuk menyetujui atau menolak pendaftaran akun guru dan penilai baru.</li>
+                  <li><strong>Penugasan & Pemantauan:</strong> Pantau pemetaan mingguan dan pastikan seluruh guru telah memiliki penilai.</li>
+                  <li><strong>Cetak & Bagikan Jadwal:</strong> Buka tab <em>Laporan & Cetak</em> untuk mencetak <strong>Format Jadwal Saja (Untuk Dibagikan)</strong> atau <strong>Format Rekap & Hasil Penilaian</strong>.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* MODAL DETAIL & FEEDBACK (DENGAN KERAHASIAAN PRIVASI) */}
@@ -1527,7 +1718,7 @@ export default function SupervisiClient() {
                   <ClipboardCheck className="w-5 h-5" />
                 </div>
                 <h3 className="font-extrabold text-lg text-slate-800">
-                  {currentUser.role === 'guru' ? 'Hasil & Catatan Penilaian Privasi Anda' : 'Detail Supervisi & Penugasan Penilai'}
+                  {currentUser.role === 'guru' ? 'Hasil & Catatan Penilaian Privasi Anda' : 'Detail Supervisi & Penilaian'}
                 </h3>
               </div>
               <button
@@ -1561,39 +1752,12 @@ export default function SupervisiClient() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Penilai Ditunjuk:</span>
+                  <span className="text-slate-500">Penilai Dipilih:</span>
                   <strong className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
-                    {selectedJadwal.penilai || 'Belum ditunjuk Admin'}
+                    {selectedJadwal.penilai || 'Belum dipilih'}
                   </strong>
                 </div>
               </div>
-
-              {/* ADMIN ASSIGN PENILAI DARI PILIHAN KASEK / WAKAKUR / SENIOR */}
-              {currentUser.role === 'admin' && (
-                <div className="bg-indigo-50/70 border border-indigo-200 p-4 rounded-2xl space-y-3">
-                  <h4 className="font-bold text-indigo-900 text-sm flex items-center gap-2">
-                    <UserPlus2 className="w-4 h-4 text-indigo-600" />
-                    <span>Tunjuk Penilai (Kepala Sekolah / Wakakur / Penilai Senior)</span>
-                  </h4>
-                  <div className="flex gap-2">
-                    <select
-                      value={assignedEvaluator}
-                      onChange={(e) => setAssignedEvaluator(e.target.value)}
-                      className="flex-1 px-4 py-2.5 rounded-xl border border-indigo-200 text-xs font-medium bg-white outline-none"
-                    >
-                      {EVALUATOR_OPTIONS.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => handleAssignPenilaiAdmin(selectedJadwal.id, assignedEvaluator)}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition shadow-sm"
-                    >
-                      Tunjuk Penilai
-                    </button>
-                  </div>
-                </div>
-              )}
 
               <div>
                 <h4 className="font-bold text-slate-800 text-sm mb-2">Sasaran KBM yang Diamati:</h4>
@@ -1607,18 +1771,16 @@ export default function SupervisiClient() {
                 </ul>
               </div>
 
-              {/* PRIVACY WARNING / NOTICE FOR GURU */}
               {currentUser.role === 'guru' && (
                 <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-start gap-3">
                   <Lock className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                   <div className="text-xs text-blue-900 space-y-1">
                     <p className="font-bold">Kerahasiaan Penilaian Pribadi</p>
-                    <p>Catatan dan umpan balik dari Kepala Sekolah atau Penilai Senior di bawah ini bersifat rahasia dan hanya dapat dilihat oleh Anda sendiri.</p>
+                    <p>Catatan dan umpan balik dari Penilai Anda bersifat rahasia dan hanya dapat dilihat oleh Anda sendiri.</p>
                   </div>
                 </div>
               )}
 
-              {/* JIKA SELESAI DINILAI */}
               {selectedJadwal.status === 'selesai' ? (
                 <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-2xl space-y-3">
                   <div className="flex items-center justify-between">
@@ -1644,14 +1806,14 @@ export default function SupervisiClient() {
                 </div>
               ) : (
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-800">
-                  Sesi ini belum dinilai. Menunggu pelaksanaan observasi oleh penilai yang ditunjuk.
+                  Sesi ini belum dinilai oleh penilai.
                 </div>
               )}
 
               {/* JIKA USER ADALAH PENILAI YANG DITUNJUK ATAU ADMIN */}
-              {(currentUser.role === 'admin' || selectedJadwal.penilai?.includes(currentUser.name)) && (
+              {(currentUser.role === 'admin' || currentUser.role === 'penilai') && (
                 <div className="border-t pt-6 space-y-4">
-                  <h4 className="font-extrabold text-slate-800 text-sm">Form Penilaian & Umpan Balik Penilai</h4>
+                  <h4 className="font-extrabold text-slate-800 text-sm">Form Penilaian & Umpan Balik Penilai ({currentUser.name})</h4>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Skor Kinerja (0 - 100)</label>
@@ -1671,7 +1833,7 @@ export default function SupervisiClient() {
                       rows={3}
                       value={inputFeedback}
                       onChange={(e) => setInputFeedback(e.target.value)}
-                      placeholder="Catatan observasi..."
+                      placeholder="Catatan observasi KBM..."
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-slate-50"
                     />
                   </div>
